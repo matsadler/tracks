@@ -5,11 +5,10 @@ end
 Rack::Handler.register('tracks', 'Tracks')
 
 class Tracks
-  %W{rack.input HTTP_VERSION REMOTE_ADDR Connection Keep-Alive close
-    HTTP/1.1 HTTP_EXPECT}.map do |str|
-    const_set(str.upcase.gsub(/[^A-Z0-9]/, "_"), str.freeze)
+  %W{rack.input HTTP_VERSION REMOTE_ADDR Connection Keep-Alive close HTTP/1.1
+    HTTP_EXPECT 100-continue}.map do |str|
+    const_set(str.upcase.sub(/^[^A-Z]+/, "").gsub(/[^A-Z0-9]/, "_"), str.freeze)
   end
-  CONTINUE = "100-continue".freeze
   ENV_CONSTANTS = {"rack.multithread" => true}
   include HTTPTools::Builder
   
