@@ -202,4 +202,55 @@ class TracksTest < Test::Unit::TestCase
       socket.sysread(1024))
   end
   
+  def test_graceful_shutdown
+    host, port = "localhost", 9292
+    app = Proc.new do |env|
+      sleep 0.9
+      @hello_app.call(env)
+    end
+    
+    server = Tracks.new(app, :Host => host, :Port => port)
+    thread = Thread.new {server.listen}
+    sleep 0.001
+    
+    socket = TCPSocket.new(host, port)
+    
+    socket << "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
+    
+    result = server.shutdown(1)
+    sleep 0.001
+    
+    assert_equal(true, result)
+    assert_raise(Errno::ECONNREFUSED) {TCPSocket.new(host, port)}
+    assert(thread.stop?, "server thread should be stopped")
+    assert_equal(
+      "HTTP/1.1 200 OK\r\nContent-Length: 13\r\nConnection: close\r\n\r\nHello world!\n",
+      socket.sysread(1024))
+    assert_raise(EOFError) {socket.sysread(1)}
+  end
+  
+  def test_forced_shutdown
+    host, port = "localhost", 9292
+    app = Proc.new do |env|
+      sleep 0.1
+      @hello_app.call(env)
+    end
+    
+    server = Tracks.new(app, :Host => host, :Port => port)
+    thread = Thread.new {server.listen}
+    sleep 0.001
+    
+    socket = TCPSocket.new(host, port)
+    
+    socket << "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
+    
+    result = server.shutdown(0)
+    sleep 0.001
+    
+    assert_equal(false, result)
+    assert_raise(Errno::ECONNREFUSED) {TCPSocket.new(host, port)}
+    assert(thread.stop?, "server thread should be stopped")
+    assert_raise(EOFError) {socket.sysread(1)}
+  end
+  
 end

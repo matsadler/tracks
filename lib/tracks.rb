@@ -65,17 +65,33 @@ class Tracks
     @port = (options[:port] || options[:Port] || "9292").to_s
     @read_timeout = options[:read_timeout] || 30
     @app = app
+    @shutdown = false
+    @shutdown_signal, @signal_shutdown = IO.pipe
+    @threads = ThreadGroup.new
     @server = TCPServer.new(@host, @port)
     @server.listen(1024)
   end
   
   def self.run(app, options={})
-    new(app, options).listen
+    instance = new(app, options)
+    trap("INT") {instance.shutdown}
+    instance.listen
+  end
+  
+  def shutdown(wait=30)
+    @shutdown = true
+    (@signal_shutdown << "x").close
+    waited = 0
+    waited += sleep 1 until @threads.list.empty? || waited >= wait
+    @threads.list.each {|thread| thread.kill}.empty?
   end
   
   def listen
-    while socket = @server.accept
-      Thread.new(socket) do |sock|
+    servers = [@server, @shutdown_signal]
+    while true
+      readable, = select(servers, nil, nil)
+      break @shutdown_signal.close if @shutdown
+      @threads.add(Thread.new(@server.accept) do |sock|
         begin
           on_connection(sock)
         rescue StandardError, LoadError, SyntaxError => e
@@ -83,7 +99,7 @@ class Tracks
         ensure
           sock.close
         end
-      end
+      end)
     end
   ensure
     @server.close
@@ -123,6 +139,7 @@ class Tracks
       
       ch = header[CONNECTION] || parser.header[CONNECTION]
       keep_alive = parser.version == HTTP_1_1 && ch != CLOSE || ch == KEEP_ALIVE
+      keep_alive = false if @shutdown
       header[CONNECTION] = keep_alive ? KEEP_ALIVE : CLOSE
       
       socket << response(status, header)
