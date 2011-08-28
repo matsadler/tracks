@@ -1,0 +1,51 @@
+= Tracks
+
+Tiny/Threaded Rack Server.
+
+Tracks is a bare-bones HTTP server that talks Rack and uses a thread per connection model of concurrency, written entirely in Ruby.
+
+* bare-bones: by doing only what it must, Tracks is kept small and fast
+* Rack based: Tracks natively uses the Rack api you already know, add missing features with Rack middleware
+* threaded: use Tracks for those problems where threads are the solution
+* pure Ruby: install and run anywhere Ruby is available, without need for a C compiler. Runs great on Ruby 1.8, 1.9, JRuby, Rubinius, and MacRuby
+
+== Install
+
+gem install tracks
+
+== Usage
+
+Add `require 'tracks'` to your config.ru, like so:
+
+  require 'tracks'
+  use Rack::ContentLength
+  
+  run(Proc.new do |env|
+    [200, {"Content-Type" => "text/plain"}, ["Hello world!\n"]]
+  end)
+
+and start it up with `rackup -stracks`
+
+== Licence
+
+(The MIT License)
+
+Copyright (c) 2011 Matthew Sadler
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
