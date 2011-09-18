@@ -110,7 +110,7 @@ class Tracks
     sockets = [socket]
     reader = Proc.new do
       readable, = select(sockets, nil, nil, @read_timeout)
-      return if readable.empty?
+      return unless readable
       begin
         socket.sysread(16384, buffer)
         parser << buffer
