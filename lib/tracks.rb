@@ -1,6 +1,4 @@
-%W{socket rubygems http_tools rack rack/rewindable_input}.each do |lib|
-  require lib
-end
+%W{socket http_tools rack rack/rewindable_input}.each {|lib| require lib}
 
 Rack::Handler.register('tracks', 'Tracks')
 
