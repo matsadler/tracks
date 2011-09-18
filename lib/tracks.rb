@@ -73,7 +73,6 @@ class Tracks
   
   def self.run(app, options={})
     instance = new(app, options)
-    trap("INT") {instance.shutdown}
     instance.listen
   end
   
