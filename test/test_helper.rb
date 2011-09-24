@@ -28,7 +28,7 @@ module TracksTestHelper
     thread = Thread.new {Tracks.run(app, :Host => host, :Port => port)}
     thread.abort_on_exception = true
     @server_threads << thread
-    sleep 0.001
+    sleep 0.01
     [host, port]
   end
   

@@ -216,6 +216,7 @@ class TracksTest < Test::Unit::TestCase
     socket = TCPSocket.new(host, port)
     
     socket << "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
+    sleep 0.001
     
     result = server.shutdown(1)
     sleep 0.001
@@ -243,6 +244,7 @@ class TracksTest < Test::Unit::TestCase
     socket = TCPSocket.new(host, port)
     
     socket << "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
+    sleep 0.001
     
     result = server.shutdown(0)
     sleep 0.001
