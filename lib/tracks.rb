@@ -15,7 +15,7 @@ class Tracks
     
     def initialize(reader)
       @reader = reader
-      @started = false
+      reset
     end
     
     def read(length=nil, output="")
