@@ -111,7 +111,7 @@ class Tracks
     parser.on(:stream) {|chunk| input.recieve_chunk(chunk)}
     parser.on(:finish) {input.finished = true}
     
-    remote_addr = socket.peeraddr.last
+    remote_family, remote_port, remote_host, remote_addr = socket.peeraddr
     while true
       reader.call until parser.header?
       env = parser.env.merge!(
