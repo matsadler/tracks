@@ -89,7 +89,6 @@ class Tracks
     server.close
   end
   
-  private
   def on_connection(socket)
     parser = HTTPTools::Parser.new
     buffer = ""
