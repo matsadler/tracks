@@ -77,10 +77,9 @@ class Tracks
     @threads.list.each {|thread| thread.kill}.empty?
   end
   
-  def listen
+  def listen(server=TCPServer.new(@host, @port))
     @shutdown = false
-    server = TCPServer.new(@host, @port)
-    server.listen(1024)
+    server.listen(1024) if server.respond_to?(:listen)
     servers = [server, @shutdown_signal]
     while true
       readable, = select(servers, nil, nil)
