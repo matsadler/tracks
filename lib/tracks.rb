@@ -4,7 +4,7 @@ Rack::Handler.register('tracks', 'Tracks')
 
 class Tracks
   %W{rack.input HTTP_VERSION REMOTE_ADDR Connection Keep-Alive close HTTP/1.1
-    HTTP_EXPECT 100-continue}.map do |str|
+    HTTP_EXPECT 100-continue SERVER_NAME SERVER_PORT}.map do |str|
     const_set(str.upcase.sub(/^[^A-Z]+/, "").gsub(/[^A-Z0-9]/, "_"), str.freeze)
   end
   ENV_CONSTANTS = {"rack.multithread" => true}
@@ -80,6 +80,7 @@ class Tracks
   def listen(server=TCPServer.new(@host, @port))
     @shutdown = false
     server.listen(1024) if server.respond_to?(:listen)
+    @port, @host = server.addr[1,2].map{|e| e.to_s} if server.respond_to?(:addr)
     servers = [server, @shutdown_signal]
     puts "Tracks HTTP server available at #{@host}:#{@port}"
     while select(servers, nil, nil) && !@shutdown
@@ -114,8 +115,8 @@ class Tracks
     remote_family, remote_port, remote_host, remote_addr = socket.peeraddr
     while true
       reader.call until parser.header?
-      env = parser.env.merge!(
-        HTTP_VERSION => parser.version, REMOTE_ADDR => remote_addr,
+      env = {SERVER_NAME => @host, SERVER_PORT => @port}.merge!(parser.env
+        ).merge!(HTTP_VERSION => parser.version, REMOTE_ADDR => remote_addr,
         RACK_INPUT => Rack::RewindableInput.new(input)).merge!(ENV_CONSTANTS)
       input.first_read {socket << response(100)} if env[HTTP_EXPECT] == CONTINUE
       
