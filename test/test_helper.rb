@@ -4,6 +4,9 @@ require 'forwardable'
 require 'rubygems'
 require 'rack'
 
+warn "WARNING silencing #puts (#{__FILE__} #{__LINE__ + 1})"
+module Kernel; def puts(*args) end end
+
 module TracksTestHelper
   
   def setup

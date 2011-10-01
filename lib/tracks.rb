@@ -81,6 +81,7 @@ class Tracks
     @shutdown = false
     server.listen(1024) if server.respond_to?(:listen)
     servers = [server, @shutdown_signal]
+    puts "Tracks HTTP server available at #{@host}:#{@port}"
     while select(servers, nil, nil) && !@shutdown
       @threads.add(Thread.new(server.accept) {|sock| on_connection(sock)})
     end
