@@ -4,7 +4,8 @@ Rack::Handler.register('tracks', 'Tracks')
 
 class Tracks
   %W{rack.input HTTP_VERSION REMOTE_ADDR Connection Keep-Alive close HTTP/1.1
-    HTTP_EXPECT 100-continue SERVER_NAME SERVER_PORT}.map do |str|
+    HTTP_EXPECT 100-continue SERVER_NAME SERVER_PORT Content-Length
+    Transfer-Encoding}.map do |str|
     const_set(str.upcase.sub(/^[^A-Z]+/, "").gsub(/[^A-Z0-9]/, "_"), str.freeze)
   end
   ENV_CONSTANTS = {"rack.multithread" => true}
@@ -122,9 +123,10 @@ class Tracks
       
       status, header, body = @app.call(env)
       
-      ch = header[CONNECTION] || parser.header[CONNECTION]
-      keep_alive = parser.version == HTTP_1_1 && ch != CLOSE || ch == KEEP_ALIVE
-      keep_alive = false if @shutdown
+      connection_header = header[CONNECTION] || parser.header[CONNECTION]
+      keep_alive = (parser.version == HTTP_1_1 && connection_header != CLOSE ||
+        connection_header == KEEP_ALIVE) && !@shutdown &&
+        (header.key?(CONTENT_LENGTH) || header.key?(TRANSFER_ENCODING))
       header[CONNECTION] = keep_alive ? KEEP_ALIVE : CLOSE
       
       socket << response(status, header)

@@ -81,6 +81,34 @@ class TracksTest < Test::Unit::TestCase
     assert_raise(EOFError) {socket.sysread(1)}
   end
   
+  def test_http_1_1_implicit_close_without_content_length
+    host, port = serve(Proc.new {|env| [200, {}, ["Hello world!\n"]]})
+    socket = TCPSocket.new(host, port)
+    
+    socket << "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
+    
+    wait_for_response
+    assert_equal(
+      "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nHello world!\n",
+      socket.sysread(1024))
+    assert_raise(EOFError) {socket.sysread(1)}
+  end
+  
+  def test_http_1_0_explicit_keep_alive_closes_without_content_length
+    host, port = serve(Proc.new {|env| [200, {}, ["Hello world!\n"]]})
+    socket = TCPSocket.new(host, port)
+    
+    socket << "GET / HTTP/1.0\r\nHost: example.com\r\nConnection: Keep-Alive\r\n\r\n"
+    
+    wait_for_response
+    assert_equal(
+      "HTTP/1.1 200 OK\r\nConnection: close\r\n\r\nHello world!\n",
+      socket.sysread(1024))
+    assert_raise(EOFError) {socket.sysread(1)}
+  end
+  
+  # TODO: Transfer-Encoding: chunked versions of keep-alive/close tests needed
+  
   def test_pipeline
     host, port = serve(@hello_app)
     socket = TCPSocket.new(host, port)
