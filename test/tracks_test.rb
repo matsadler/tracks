@@ -17,6 +17,31 @@ class TracksTest < Test::Unit::TestCase
       socket.sysread(1024))
   end
   
+  def test_chunked_get
+    chunked_body = Object.new
+    def chunked_body.each
+      yield "Hello"
+      sleep 0.01
+      yield " world"
+      sleep 0.01
+      yield "!\n"
+    end
+    chunked_app = Rack::Chunked.new(Proc.new do |env|
+      [200, {}, chunked_body]
+    end)
+    host, port = serve(chunked_app)
+    socket = TCPSocket.new(host, port)
+    
+    socket << "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
+    
+    wait_for_response
+    assert_equal(
+      "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: Keep-Alive\r\n\r\n5\r\nHello\r\n",
+      socket.sysread(1024))
+    assert_equal("6\r\n world\r\n", socket.sysread(1024))
+    assert_equal("2\r\n!\n\r\n0\r\n\r\n", socket.sysread(1024))
+  end
+  
   def test_http_1_1_implicit_keep_alive
     host, port = serve(@hello_app)
     socket = TCPSocket.new(host, port)
