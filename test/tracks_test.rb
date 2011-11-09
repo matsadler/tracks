@@ -256,7 +256,7 @@ class TracksTest < Test::Unit::TestCase
   end
   
   def test_graceful_shutdown
-    host, port = "localhost", 9292
+    host, port = "localhost", 8421
     app = Proc.new do |env|
       sleep 0.9
       @hello_app.call(env)
@@ -284,7 +284,7 @@ class TracksTest < Test::Unit::TestCase
   end
   
   def test_forced_shutdown
-    host, port = "localhost", 9292
+    host, port = "localhost", 8421
     app = Proc.new do |env|
       sleep 0.1
       @hello_app.call(env)
@@ -309,7 +309,7 @@ class TracksTest < Test::Unit::TestCase
   end
   
   def test_restart
-    host, port = "localhost", 9292
+    host, port = "localhost", 8421
     app = Proc.new do |env|
       sleep 0.001
       @hello_app.call(env)
