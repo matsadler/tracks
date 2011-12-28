@@ -134,6 +134,56 @@ class TracksTest < Test::Unit::TestCase
   
   # TODO: Transfer-Encoding: chunked versions of keep-alive/close tests needed
   
+  def test_app_can_force_http_1_1_close
+    host, port = serve(Proc.new do |env|
+      [200, {"Content-Length" => "13", "Connection" => "close"}, ["Hello world!\n"]]
+    end)
+    socket = TCPSocket.new(host, port)
+    
+    socket << "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
+    
+    wait_for_response
+    assert_equal(
+      "HTTP/1.1 200 OK\r\nContent-Length: 13\r\nConnection: close\r\n\r\nHello world!\n",
+      socket.sysread(1024))
+    assert_raise(EOFError) {socket.sysread(1)}
+  end
+  
+  def test_app_can_force_http_1_1_close_case_insensitive
+    host, port = serve(Proc.new do |env|
+      [200, {"Content-Length" => "13", "cOnNeCtIoN" => "cLoSe"}, ["Hello world!\n"]]
+    end)
+    socket = TCPSocket.new(host, port)
+    
+    socket << "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
+    
+    wait_for_response
+    assert_equal(
+      "HTTP/1.1 200 OK\r\nContent-Length: 13\r\nConnection: close\r\n\r\nHello world!\n",
+      socket.sysread(1024))
+    assert_raise(EOFError) {socket.sysread(1)}
+  end
+  
+  def test_app_can_force_http_1_0_keep_alive
+    host, port = serve(Proc.new do |env|
+      [200, {"Content-Length" => "13", "Connection" => "Keep-Alive"}, ["Hello world!\n"]]
+    end)
+    socket = TCPSocket.new(host, port)
+    
+    socket << "GET / HTTP/1.0\r\nHost: example.com\r\n\r\n"
+    
+    wait_for_response
+    assert_equal(
+      "HTTP/1.1 200 OK\r\nContent-Length: 13\r\nConnection: Keep-Alive\r\n\r\nHello world!\n",
+      socket.sysread(1024))
+    
+    socket << "GET / HTTP/1.0\r\nHost: example.com\r\n\r\n"
+    wait_for_response
+    assert_equal(
+      "HTTP/1.1 200 OK\r\nContent-Length: 13\r\nConnection: Keep-Alive\r\n\r\nHello world!\n",
+      socket.sysread(1024))
+  end
+  
   def test_pipeline
     host, port = serve(@hello_app)
     socket = TCPSocket.new(host, port)
