@@ -129,7 +129,7 @@ class Tracks
         (!connection_header || connection_header.casecmp(CLOSE) != 0)) ||
         (connection_header && connection_header.casecmp(KEEP_ALIVE) == 0)) &&
         !@shutdown && (header.key?(CONTENT_LENGTH) ||
-        header.key?(TRANSFER_ENCODING))
+        header.key?(TRANSFER_ENCODING) || HTTPTools::NO_BODY[status.to_i])
       header[CONNECTION] = keep_alive ? KEEP_ALIVE : CLOSE
       
       socket << response(status, header)
