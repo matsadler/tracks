@@ -452,4 +452,24 @@ class TracksTest < Test::Unit::TestCase
     assert_raise(EOFError) {socket2.sysread(1)}
   end
   
+  def test_shutdown_all
+    host, port = "localhost", 8421
+    
+    server = Tracks.new(@hello_app, :Host => host, :Port => port)
+    server2 = Tracks.new(@hello_app, :Host => host, :Port => port + 1)
+    thread = Thread.new {server.listen}
+    thread2 = Thread.new {server2.listen}
+    
+    sleep 0.01
+    
+    result = Tracks.shutdown(1)
+    sleep 0.01
+    
+    assert_equal(true, result)
+    assert_raise(Errno::ECONNREFUSED) {TCPSocket.new(host, port)}
+    assert_raise(Errno::ECONNREFUSED) {TCPSocket.new(host, port + 1)}
+    assert(thread.stop?, "server thread should be stopped")
+    assert(thread2.stop?, "server thread should be stopped")
+  end
+  
 end

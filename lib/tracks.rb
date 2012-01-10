@@ -10,6 +10,7 @@ class Tracks
   end
   ENV_CONSTANTS = {"rack.multithread" => true}
   include HTTPTools::Builder
+  class << self; attr_accessor :running end; @running = []
   
   class Input
     attr_accessor :finished
@@ -71,8 +72,13 @@ class Tracks
     new(app, options).listen
   end
   
+  def self.shutdown(wait=30)
+    running.dup.inject(true) {|memo, s| s.shutdown(wait) && memo}
+  end
+  
   def shutdown(wait=30)
     @shutdown = true
+    self.class.running.delete(self)
     @signal_shutdown << "x"
     wait -= sleep 1 until @threads.list.empty? || wait <= 0
     @threads.list.each {|thread| thread.kill}.empty?
@@ -83,6 +89,7 @@ class Tracks
     server.listen(1024) if server.respond_to?(:listen)
     @port, @host = server.addr[1,2].map{|e| e.to_s} if server.respond_to?(:addr)
     servers = [server, @shutdown_signal]
+    self.class.running << self
     puts "Tracks HTTP server available at #{@host}:#{@port}"
     while select(servers, nil, nil) && !@shutdown
       @threads.add(Thread.new(server.accept) {|sock| on_connection(sock)})

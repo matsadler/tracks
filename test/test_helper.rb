@@ -10,8 +10,6 @@ module Kernel; def puts(*args) end end
 module TracksTestHelper
   
   def setup
-    @server_threads = []
-    
     @hello_app = Proc.new do |env|
       [200, {"Content-Length" => "13"}, ["Hello world!\n"]]
     end
@@ -22,7 +20,7 @@ module TracksTestHelper
   end
   
   def teardown
-    @server_threads.each {|thread| thread.exit}
+    Tracks.shutdown(0)
     sleep 0.001
   end
   
@@ -30,7 +28,6 @@ module TracksTestHelper
     host, port = "localhost", 8421
     thread = Thread.new {Tracks.run(app, :Host => host, :Port => port)}
     thread.abort_on_exception = true
-    @server_threads << thread
     sleep 0.01
     [host, port]
   end
