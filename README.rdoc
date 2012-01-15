@@ -2,20 +2,35 @@
 
 Tiny/Threaded Rack Server.
 
-Tracks is a bare-bones HTTP server that talks Rack and uses a thread per connection model of concurrency, written entirely in Ruby.
+Tracks is a bare-bones HTTP server that talks Rack and uses a thread per
+connection model of concurrency, written entirely in Ruby.
 
 * bare-bones: by doing only what it must, Tracks is kept small and fast
-* Rack based: Tracks natively uses the Rack api you already know, add missing features with Rack middleware
+* Rack based: Tracks natively uses the Rack api you already know, add missing
+  features with Rack middleware
 * threaded: use Tracks for those problems where threads are the solution
-* pure Ruby: install and run anywhere Ruby is available, without need for a C compiler. Runs great on Ruby 1.8, 1.9, JRuby, Rubinius, and MacRuby
+* pure Ruby: install and run anywhere Ruby is available, without need for a C
+  compiler. Debug the whole stack. Runs great on Ruby 1.8, 1.9, JRuby,
+  Rubinius, and MacRuby
+
+== Features
+
+* handles concurrent requests
+* stream requests in and responses out
+* keep-alive support
+* on 100-continue automatically sends continue response when #read is called on
+  rack.input
+* graceful shutdown
+* easily extensible, see
+  examples[http://github.com/matsadler/tracks/tree/master/examples]
 
 == Install
 
-gem install tracks
+  gem install tracks
 
 == Usage
 
-Add `require 'tracks'` to your config.ru, like so:
+Add <tt>require 'tracks'</tt> to your config.ru, like so:
 
   require 'tracks'
   use Rack::ContentLength
@@ -24,13 +39,16 @@ Add `require 'tracks'` to your config.ru, like so:
     [200, {"Content-Type" => "text/plain"}, ["Hello world!\n"]]
   end)
 
-and start it up with `rackup -stracks`
+and start it up with <tt>rackup -stracks</tt>
+
+you can also use the 'magic comment' <tt>#\ --server tracks</tt> in your
+config.ru to default to Tracks.
 
 == Licence
 
 (The MIT License)
 
-Copyright (c) 2011 Matthew Sadler
+Copyright (c) 2011, 2012 Matthew Sadler
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

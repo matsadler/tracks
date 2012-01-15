@@ -2,24 +2,114 @@
 
 Rack::Handler.register('tracks', 'Tracks')
 
+# Tracks is a bare-bones HTTP server that talks Rack and uses a thread per
+# connection model of concurrency.
+# 
+# The simplest way to get up and running with Tracks is via rackup, in the same
+# directory as your application's config.ru run
+# 
+#   rackup -rtracks -stracks
+# 
+# Alternately you can alter your config.ru, adding to the top
+# 
+#   require "tracks"
+#   #\ --server tracks
+# 
+# If you need to start up Tracks from code, the simplest way to go is
+# 
+#   require "tracks"
+#   Tracks.run(app, :host => host, :port => port)
+# 
+# Where app is a Rack app, responding to #call. The ::run method will block till
+# the server quits. To stop all running Tracks servers in the current process
+# call ::shutdown. You may want to setup a signal handler for this, like so
+# 
+#   trap(:INT) {Tracks.shutdown}
+# 
+# This will allow Tracks to gracefully shutdown when your program is quit with
+# Ctrl-C. The signal handler must be setup before the call to ::run.
+# 
+# A slightly more generic version of the above looks like
+# 
+#   server = Tracks.new(app, :host => host, :port => port)
+#   trap(:INT) {server.shutdown}
+#   server.listen
+# 
+# To start a server listening on a Unix domain socket, an instance of
+# UNIXServer can be given to #listen
+# 
+#   require "socket"
+#   server = Tracks.new(app)
+#   server.listen(UNIXServer.new("/tmp/tracks.sock"))
+# 
+# If you have an already accepted socket you can use Tracks to handle the
+# connection like so
+# 
+#   server = Tracks.new(app)
+#   server.on_connection(socket)
+# 
+# A specific use case for this would be an inetd handler, which would look like
+# 
+#   STDERR.reopen(File.new("/dev/null", "w"))
+#   server = Tracks.new(app)
+#   server.on_connection(TCPSocket.for_fd(STDIN.fileno))
+# 
 class Tracks
   %W{rack.input HTTP_VERSION REMOTE_ADDR Connection HTTP_CONNECTION Keep-Alive
     close HTTP/1.1 HTTP_EXPECT 100-continue SERVER_NAME SERVER_PORT
     Content-Length Transfer-Encoding}.map do |str|
     const_set(str.upcase.sub(/^[^A-Z]+/, "").gsub(/[^A-Z0-9]/, "_"), str.freeze)
   end
-  ENV_CONSTANTS = {"rack.multithread" => true}
+  ENV_CONSTANTS = {"rack.multithread" => true} # :nodoc:
   include HTTPTools::Builder
-  class << self; attr_accessor :running end; @running = []
   
+  @running = []
+  class << self
+    # class accessor, array of currently running instances
+    attr_accessor :running
+  end
+  
+  # Tracks::Input is used to defer reading of the input stream. It is used
+  # internally to Tracks, and should not need to be created outside of Tracks.
+  # 
+  # Tracks::Input is not rewindable, so will always come wrapped by a
+  # Rack::RewindableInput. The #read method conforms to the Rack input spec for
+  # #read.
+  # 
+  # On initialisation the Tracks::Input instance is given an object which it
+  # will use to notify it's creator when input is required. This will be done
+  # by calling the #call method on the passed object. This call method should
+  # block until after a chunk of input has been fed to the Tracks::Input
+  # instance's #recieve_chunk method.
+  # 
   class Input
+    # set true when the end of the stream has been read into the internal buffer
     attr_accessor :finished
     
+    # :call-seq: Input.new(reader) -> input
+    # 
+    # Create a new Input instance.
+    # 
     def initialize(reader)
       @reader = reader
       reset
     end
     
+    # :call-seq: input.read([length[, buffer]])
+    # 
+    # Read at most length bytes from the input stream.
+    # 
+    # Conforms to the Rack spec for the input stream's #read method:
+    # 
+    # If given, length must be an non-negative Integer (>= 0) or nil, and
+    # buffer must be a String and may not be nil. If length is given and not
+    # nil, then this method reads at most length bytes from the input stream.
+    # If length is not given or nil, then this method reads all data until EOF.
+    # When EOF is reached, this method returns nil if length is given and not
+    # nil, or "" if length is not given or is nil. If buffer is given, then the
+    # read data will be placed into buffer instead of a newly created String
+    # object.
+    # 
     def read(length=nil, output="")
       @on_initial_read.call if @on_initial_read && !@started
       @started = true
@@ -38,14 +128,28 @@ class Tracks
       output
     end
     
+    # :call-seq: input.recieve_chunk(string) -> string
+    # 
+    # Append string to the internal buffer.
+    # 
     def recieve_chunk(chunk)
       if @buffer then @buffer << chunk else @buffer = chunk end
     end
     
+    # :call-seq: input.first_read { block } -> block
+    # 
+    # Setup a callback to be executed on when #read is first called. Only one
+    # callback can be set, with subsequent calls to this method overriding the
+    # previous. Used internally to Tracks for automatic 100-continue support.
+    # 
     def first_read(&block)
       @on_initial_read = block
     end
     
+    # :call-seq: input.reset -> nil
+    # 
+    # Reset input, allowing it to be reused.
+    # 
     def reset
       @started = false
       @finished = false
@@ -59,6 +163,17 @@ class Tracks
     end
   end
   
+  # :call-seq: Tracks.new(rack_app[, options]) -> server
+  # 
+  # Create a new Tracks server. rack_app should be a rack application,
+  # responding to #call. options should be a hash, with the following optional
+  # keys, as symbols
+  # 
+  # [:host]         the host to listen on, defaults to 0.0.0.0
+  # [:port]         the port to listen on, defaults to 9292
+  # [:read_timeout] the maximum amount of time, in seconds, to wait on idle
+  #                 connections, defaults to 30
+  # 
   def initialize(app, options={})
     @host = options[:host] || options[:Host] || "0.0.0.0"
     @port = (options[:port] || options[:Port] || "9292").to_s
@@ -68,14 +183,35 @@ class Tracks
     @threads = ThreadGroup.new
   end
   
+  # :call-seq: Tracks.run(rack_app[, options]) -> nil
+  # 
+  # Equivalent to Tracks.new(rack_app, options).listen
+  # 
   def self.run(app, options={})
     new(app, options).listen
   end
   
+  # :call-seq: Tracks.shutdown([wait_time]) -> bool
+  # 
+  # Shut down all running Tracks servers, after waiting wait_time seconds for
+  # each to gracefully shutdown. See #shutdown for more.
+  # 
   def self.shutdown(wait=30)
     running.dup.inject(true) {|memo, s| s.shutdown(wait) && memo}
   end
   
+  # :call-seq: server.shutdown(wait_time) -> bool
+  # 
+  # Shut down the server, after waiting wait_time seconds for graceful
+  # shutdown. Returns true on graceful shutdown, false otherwise.
+  # 
+  # wait_time defaults to 30 seconds.
+  # 
+  # A return value of false indicates there were threads left running after
+  # wait_time had expired which were forcibly killed. This may leave resources
+  # in an inconsistant state, and it is advised you exit the process in this
+  # case (likely what you were planning anyway).
+  # 
   def shutdown(wait=30)
     @shutdown = true
     self.class.running.delete(self)
@@ -84,6 +220,17 @@ class Tracks
     @threads.list.each {|thread| thread.kill}.empty?
   end
   
+  # :call-seq: server.listen([socket_server]) -> nil
+  # 
+  # Start listening for/accepting connections on socket_server. socket_server
+  # defaults to a TCP server listening on the host and port supplied to ::new.
+  # 
+  # An alternate socket server can be supplied as an argument, such as an
+  # instance of UNIXServer to listen on a unix domain socket.
+  # 
+  # This method will block until #shutdown is called. The socket_server will
+  # be closed when this method returns.
+  # 
   def listen(server=TCPServer.new(@host, @port))
     @shutdown = false
     server.listen(1024) if server.respond_to?(:listen)
@@ -99,6 +246,17 @@ class Tracks
     server.close
   end
   
+  # :call-seq: server.on_connection(socket) -> nil
+  # 
+  # Handle HTTP messages on socket, dispatching them to the rack_app supplied to
+  # ::new.
+  # 
+  # This method will return when socket has reached EOF or has been idle for
+  # the read_timeout supplied to ::new. The socket will be closed when this
+  # method returns.
+  # 
+  # Errors encountered in this method will be printed to stderr, but not raised.
+  # 
   def on_connection(socket)
     parser = HTTPTools::Parser.new
     buffer = ""
