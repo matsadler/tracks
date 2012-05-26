@@ -20,7 +20,7 @@ module TracksTestHelper
   end
   
   def teardown
-    Tracks.shutdown(0)
+    Tracks.shutdown
     sleep 0.001
   end
   

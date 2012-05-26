@@ -169,18 +169,21 @@ class Tracks
   # responding to #call. options should be a hash, with the following optional
   # keys, as symbols
   # 
-  # [:host]         the host to listen on, defaults to 0.0.0.0
-  # [:port]         the port to listen on, defaults to 9292
-  # [:read_timeout] the maximum amount of time, in seconds, to wait on idle
-  #                 connections, defaults to 30
+  # [:host]             the host to listen on, defaults to 0.0.0.0
+  # [:port]             the port to listen on, defaults to 9292
+  # [:read_timeout]     the maximum amount of time, in seconds, to wait on idle
+  #                     connections, defaults to 30
+  # [:shutdown_timeout] the maximum amount of time, in seconds, to wait for
+  #                     in process requests to complete when signalled to shut
+  #                     down, defaults to 30
   # 
   def initialize(app, options={})
     @host = options[:host] || options[:Host] || "0.0.0.0"
     @port = (options[:port] || options[:Port] || "9292").to_s
     @read_timeout = options[:read_timeout] || 30
+    @shutdown_timeout = options[:shutdown_timeout] || 30
     @app = app
     @shutdown_signal, @signal_shutdown = IO.pipe
-    @threads = ThreadGroup.new
   end
   
   # :call-seq: Tracks.run(rack_app[, options]) -> nil
@@ -191,36 +194,25 @@ class Tracks
     new(app, options).listen
   end
   
-  # :call-seq: Tracks.shutdown([wait_time]) -> bool
+  # :call-seq: Tracks.shutdown -> nil
   # 
-  # Shut down all running Tracks servers, after waiting wait_time seconds for
-  # each to gracefully shutdown. See #shutdown for more.
+  # Signal all running Tracks servers to shutdown.
   # 
-  def self.shutdown(wait=30)
-    running.dup.inject(true) {|memo, s| s.shutdown(wait) && memo}
+  def self.shutdown
+    running.dup.each {|s| s.shutdown} && nil
   end
   
-  # :call-seq: server.shutdown(wait_time) -> bool
+  # :call-seq: server.shutdown -> nil
   # 
-  # Shut down the server, after waiting wait_time seconds for graceful
-  # shutdown. Returns true on graceful shutdown, false otherwise.
+  # Signal the server to shut down.
   # 
-  # wait_time defaults to 30 seconds.
-  # 
-  # A return value of false indicates there were threads left running after
-  # wait_time had expired which were forcibly killed. This may leave resources
-  # in an inconsistant state, and it is advised you exit the process in this
-  # case (likely what you were planning anyway).
-  # 
-  def shutdown(wait=30)
+  def shutdown
     @shutdown = true
     self.class.running.delete(self)
-    @signal_shutdown << "x"
-    wait -= sleep 1 until @threads.list.empty? || wait <= 0
-    @threads.list.each {|thread| thread.kill}.empty?
+    @signal_shutdown << "x" && nil
   end
   
-  # :call-seq: server.listen([socket_server]) -> nil
+  # :call-seq: server.listen([socket_server]) -> bool
   # 
   # Start listening for/accepting connections on socket_server. socket_server
   # defaults to a TCP server listening on the host and port supplied to ::new.
@@ -231,19 +223,27 @@ class Tracks
   # This method will block until #shutdown is called. The socket_server will
   # be closed when this method returns.
   # 
+  # A return value of false indicates there were threads left running after
+  # shutdown_timeout had expired which were forcibly killed. This may leave
+  # resources in an inconsistant state, and it is advised you exit the process
+  # in this case (likely what you were planning anyway).
+  # 
   def listen(server=TCPServer.new(@host, @port))
     @shutdown = false
     server.listen(1024) if server.respond_to?(:listen)
     @port, @host = server.addr[1,2].map{|e| e.to_s} if server.respond_to?(:addr)
     servers = [server, @shutdown_signal]
+    threads = ThreadGroup.new
     self.class.running << self
     puts "Tracks HTTP server available at #{@host}:#{@port}"
     while select(servers, nil, nil) && !@shutdown
-      @threads.add(Thread.new(server.accept) {|sock| on_connection(sock)})
+      threads.add(Thread.new(server.accept) {|sock| on_connection(sock)})
     end
-    @shutdown_signal.sysread(1) && nil
-  ensure
     server.close
+    wait = @shutdown_timeout
+    wait -= sleep 1 until threads.list.empty? || wait <= 0
+    @shutdown_signal.sysread(1)
+    threads.list.each {|thread| thread.kill}.empty?
   end
   
   # :call-seq: server.on_connection(socket) -> nil
@@ -260,10 +260,14 @@ class Tracks
   def on_connection(socket)
     parser = HTTPTools::Parser.new
     buffer = ""
-    sockets = [socket]
+    sockets = [socket, @shutdown_signal]
+    idle = false
     reader = Proc.new do
       readable, = select(sockets, nil, nil, @read_timeout)
       return unless readable
+      sockets.delete(@shutdown_signal) if @shutdown
+      return if idle && @shutdown
+      idle = false
       begin
         socket.sysread(16384, buffer)
         parser << buffer
@@ -301,11 +305,12 @@ class Tracks
       body.each {|chunk| socket << chunk}
       body.close if body.respond_to?(:close)
       
-      if keep_alive
+      if keep_alive && !@shutdown
         reader.call until parser.finished?
         input.reset
         remainder = parser.rest.lstrip
         parser.reset << remainder
+        idle = true
       else
         break
       end

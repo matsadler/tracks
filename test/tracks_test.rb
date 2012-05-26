@@ -359,10 +359,10 @@ class TracksTest < Test::Unit::TestCase
     socket << "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
     sleep 0.001
     
-    result = server.shutdown(1)
+    result = server.shutdown
     sleep 0.001
     
-    assert_equal(true, result)
+    assert_equal(true, thread.value)
     assert_raise(Errno::ECONNREFUSED) {TCPSocket.new(host, port)}
     assert(thread.stop?, "server thread should be stopped")
     assert_equal(
@@ -378,7 +378,7 @@ class TracksTest < Test::Unit::TestCase
       @hello_app.call(env)
     end
     
-    server = Tracks.new(app, :Host => host, :Port => port)
+    server = Tracks.new(app, :Host => host, :Port => port, :shutdown_timeout => 0)
     thread = Thread.new {server.listen}
     sleep 0.001
     
@@ -387,10 +387,10 @@ class TracksTest < Test::Unit::TestCase
     socket << "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
     sleep 0.001
     
-    result = server.shutdown(0)
+    result = server.shutdown
     sleep 0.001
     
-    assert_equal(false, result)
+    assert_equal(false, thread.value)
     assert_raise(Errno::ECONNREFUSED) {TCPSocket.new(host, port)}
     assert(thread.stop?, "server thread should be stopped")
     assert_raise(EOFError) {socket.sysread(1)}
@@ -417,7 +417,7 @@ class TracksTest < Test::Unit::TestCase
       socket.sysread(1024))
     
     # shutdown
-    server.shutdown(0)
+    server.shutdown
     sleep 0.001
     
     # check it's stopped
@@ -440,11 +440,11 @@ class TracksTest < Test::Unit::TestCase
     socket2 << "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
     sleep 0.001
     
-    result = server.shutdown(1)
+    result = server.shutdown
     sleep 0.001
     
-    assert_equal(true, result)
     assert_raise(Errno::ECONNREFUSED) {TCPSocket.new(host, port)}
+    assert_equal(true, thread2.value)
     assert(thread2.stop?, "server thread should be stopped")
     assert_equal(
       "HTTP/1.1 200 OK\r\nContent-Length: 13\r\nConnection: close\r\n\r\nHello world!\n",
@@ -462,10 +462,11 @@ class TracksTest < Test::Unit::TestCase
     
     sleep 0.01
     
-    result = Tracks.shutdown(1)
+    result = Tracks.shutdown
     sleep 0.01
     
-    assert_equal(true, result)
+    assert_equal(true, thread.value)
+    assert_equal(true, thread2.value)
     assert_raise(Errno::ECONNREFUSED) {TCPSocket.new(host, port)}
     assert_raise(Errno::ECONNREFUSED) {TCPSocket.new(host, port + 1)}
     assert(thread.stop?, "server thread should be stopped")
