@@ -5,9 +5,10 @@ require "test/unit"
 class InputTest < Test::Unit::TestCase
   
   def setup
+    static = ""
     @input = Tracks::Input.new(Proc.new do
       if chunk = @chunks.shift
-        @input.recieve_chunk(chunk)
+        @input.recieve_chunk(static.replace(chunk))
       else
         @input.finished = true
       end

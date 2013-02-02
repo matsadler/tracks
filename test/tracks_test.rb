@@ -280,6 +280,33 @@ class TracksTest < Test::Unit::TestCase
       socket.sysread(1024))
   end
   
+  def test_read_post_before_all_written
+    chunks = []
+    app = Proc.new do |env|
+      while chunk = env["rack.input"].read(1024)
+        chunks << chunk
+      end
+      [200, {"Content-Length" => "13"}, ["Hello world!\n"]]
+    end
+    host, port = serve(app)
+    socket = TCPSocket.new(host, port)
+    
+    socket << "POST / HTTP/1.1\r\nHost: example.com\r\nContent-Length: 9\r\n\r\n"
+    wait_for_response
+    socket << "foo"
+    wait_for_response
+    socket << "bar"
+    wait_for_response
+    socket << "baz"
+    
+    wait_for_response
+    assert_equal(["foobarbaz"], chunks)
+    
+    assert_equal(
+      "HTTP/1.1 200 OK\r\nContent-Length: 13\r\nConnection: Keep-Alive\r\n\r\nHello world!\n",
+      socket.sysread(1024))
+  end
+  
   def test_100_continue
     host, port = serve(@echo_app)
     socket = TCPSocket.new(host, port)

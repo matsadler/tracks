@@ -133,7 +133,7 @@ class Tracks
     # Append string to the internal buffer.
     # 
     def recieve_chunk(chunk)
-      if @buffer then @buffer << chunk else @buffer = chunk end
+      if @buffer then @buffer << chunk else @buffer = chunk.dup end
     end
     
     # :call-seq: input.first_read { block } -> block
