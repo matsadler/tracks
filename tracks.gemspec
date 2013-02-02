@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name = "tracks"
-  s.version = "0.2.0"
+  s.version = "0.2.1"
   s.summary = "Threaded Ruby Rack HTTP server"
   s.description = "A bare-bones Ruby HTTP server that talks Rack and uses a thread per connection model of concurrency."
   s.files = %W{lib}.map {|dir| Dir["#{dir}/**/*.rb"]}.flatten << "README.rdoc"
