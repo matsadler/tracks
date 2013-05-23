@@ -21,9 +21,9 @@ class TracksTest < Test::Unit::TestCase
     chunked_body = Object.new
     def chunked_body.each
       yield "Hello"
-      sleep 0.01
+      sleep 0.05
       yield " world"
-      sleep 0.01
+      sleep 0.05
       yield "!\n"
     end
     chunked_app = Rack::Chunked.new(Proc.new do |env|
@@ -415,7 +415,7 @@ class TracksTest < Test::Unit::TestCase
     sleep 0.001
     
     result = server.shutdown
-    sleep 0.001
+    sleep 0.1
     
     assert_equal(false, thread.value)
     assert_raise(Errno::ECONNREFUSED) {TCPSocket.new(host, port)}
@@ -445,7 +445,7 @@ class TracksTest < Test::Unit::TestCase
     
     # shutdown
     server.shutdown
-    sleep 0.001
+    sleep 0.1
     
     # check it's stopped
     assert_raise(Errno::ECONNREFUSED) {TCPSocket.new(host, port)}
@@ -465,10 +465,9 @@ class TracksTest < Test::Unit::TestCase
     
     # check graceful shutdown still works
     socket2 << "GET / HTTP/1.1\r\nHost: example.com\r\n\r\n"
-    sleep 0.001
     
     result = server.shutdown
-    sleep 0.001
+    sleep 0.1
     
     assert_raise(Errno::ECONNREFUSED) {TCPSocket.new(host, port)}
     assert_equal(true, thread2.value)

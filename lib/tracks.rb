@@ -183,7 +183,6 @@ class Tracks
     @read_timeout = options[:read_timeout] || 30
     @shutdown_timeout = options[:shutdown_timeout] || 30
     @app = app
-    @shutdown_signal, @signal_shutdown = IO.pipe
   end
   
   # :call-seq: Tracks.run(rack_app[, options]) -> nil
@@ -208,8 +207,7 @@ class Tracks
   # 
   def shutdown
     @shutdown = true
-    self.class.running.delete(self)
-    @signal_shutdown << "x" && nil
+    self.class.running.delete(self) && nil
   end
   
   # :call-seq: server.listen([socket_server]) -> bool
@@ -232,17 +230,16 @@ class Tracks
     @shutdown = false
     server.listen(1024) if server.respond_to?(:listen)
     @port, @host = server.addr[1,2].map{|e| e.to_s} if server.respond_to?(:addr)
-    servers = [server, @shutdown_signal]
+    servers = [server]
     threads = ThreadGroup.new
     self.class.running << self
     puts "Tracks HTTP server available at #{@host}:#{@port}"
-    while select(servers, nil, nil) && !@shutdown
+    if select(servers, nil, nil, 0.1)
       threads.add(Thread.new(server.accept) {|sock| on_connection(sock)})
-    end
+    end until @shutdown
     server.close
     wait = @shutdown_timeout
     wait -= sleep 1 until threads.list.empty? || wait <= 0
-    @shutdown_signal.sysread(1)
     threads.list.each {|thread| thread.kill}.empty?
   end
   
@@ -260,13 +257,16 @@ class Tracks
   def on_connection(socket)
     parser = HTTPTools::Parser.new
     buffer = ""
-    sockets = [socket, @shutdown_signal]
+    sockets = [socket]
     idle = false
     reader = Proc.new do
-      readable, = select(sockets, nil, nil, @read_timeout)
+      wait = @read_timeout
+      begin
+        return if idle && @shutdown
+        readable, = select(sockets, nil, nil, 0.1)
+        wait - 0.1
+      end until readable || wait < 0
       return unless readable
-      sockets.delete(@shutdown_signal) if @shutdown
-      return if idle && @shutdown
       idle = false
       begin
         socket.sysread(16384, buffer)

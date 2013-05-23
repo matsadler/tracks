@@ -21,14 +21,14 @@ module TracksTestHelper
   
   def teardown
     Tracks.shutdown
-    sleep 0.001
+    sleep 0.1
   end
   
   def serve(app)
     host, port = "localhost", 8421
     thread = Thread.new {Tracks.run(app, :Host => host, :Port => port)}
     thread.abort_on_exception = true
-    sleep 0.01
+    sleep 0.1
     [host, port]
   end
   
